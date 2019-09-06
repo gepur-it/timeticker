@@ -1,0 +1,4 @@
+{
+    rabbit_connection_string: "amqp://gepur_erp:gepur_erp@127.0.0.1:5672/vhost",
+    rabbit_cets_queue: "cets"
+}

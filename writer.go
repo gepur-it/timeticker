@@ -3,8 +3,8 @@ package main
 import (
     "encoding/json"
     "github.com/streadway/amqp"
-	"strconv"
 	"log"
+	"time"
 )
 
 func failOnError(err error, msg string) {
@@ -14,66 +14,44 @@ func failOnError(err error, msg string) {
 }
 
 type Writer struct {
-    outChan chan int64
+    Connection *amqp.Connection
+    Channel *amqp.Channel
+    QueueName string
 }
 
-func writer(outChan chan int64) *Writer {
-  return &Writer{
-      outChan: outChan,
-  }
-}
-
-type EventParams struct {
-   Time string `json:"time"`
-}
-type EventStruct struct {
-   Name string `json:"name"`
-   Parameters *EventParams `json:"parameters"`
-}
-
-type Message struct {
-    MessageType string `json:"type"`
-    Payload *EventStruct `json:"payload"`
-}
-
-func message(incTime int64) *Message {
-    return &Message {
-        MessageType: "event",
-        Payload: &EventStruct {
-            Name: "time",
-            Parameters: &EventParams{
-                Time: strconv.FormatInt(incTime, 10),
-            },
+func (wrtr *Writer) send(Time time.Time) {
+    message := message(Time.Unix())
+    body, err := json.Marshal(message)
+    failOnError(err, "Failed encode message")
+    err = wrtr.Channel.Publish(
+        wrtr.QueueName,     // exchange
+        wrtr.QueueName, // routing key
+        false,  // mandatory
+        false,  // immediate
+        amqp.Publishing {
+            ContentType: "application/json",
+            Body:        body,
         },
-    }
+    )
+    failOnError(err, "Failed to publish a message")
 }
 
-
-func (wrtr *Writer) run() {
-    conn, err := amqp.Dial("amqp://gepur_erp:gepur_erp@127.0.0.1:5672/")
+func (wrtr *Writer) connect(Config Configuration) {
+    wrtr.QueueName = Config.QueueName
+    conn, err := amqp.Dial(Config.ConnectionString)
     failOnError(err, "Failed to connect to RabbitMQ")
-    defer conn.Close()
+    wrtr.Connection = conn
     ch, err := conn.Channel()
     failOnError(err, "Failed to open a channel")
-    defer ch.Close()
+    wrtr.Channel = ch
+}
 
+func (wrtr *Writer) run() {
+    defer wrtr.Connection.Close()
+    defer wrtr.Channel.Close()
+    ticker := time.NewTicker(time.Second)
     for {
-        currentTime := <- wrtr.outChan
-        message := message(currentTime)
-        body, err := json.Marshal(message)
-        if err != nil {
-            panic(err)
-        }
-        err = ch.Publish(
-            "cets",     // exchange
-            "cets", // routing key
-            false,  // mandatory
-            false,  // immediate
-            amqp.Publishing {
-                ContentType: "application/json",
-                Body:        body,
-            },
-        )
-        failOnError(err, "Failed to publish a message")
+        Time := <- ticker.C
+        wrtr.send(Time)
     }
 }
