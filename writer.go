@@ -5,6 +5,7 @@ import (
     "github.com/streadway/amqp"
 	"log"
 	"time"
+    "fmt"
 )
 
 func failOnError(err error, msg string) {
@@ -27,6 +28,7 @@ func connect(configuration Configuration) (*amqp.Connection, *amqp.Channel) {
 
 func (wrtr *Writer) send(Time time.Time) {
     conn, ch := connect(wrtr.configuration)
+    defer fmt.Println(Time.Format("01-02-2006 15:04:05"), ":", Time.Unix());
     defer conn.Close()
     defer ch.Close()
 
@@ -43,10 +45,13 @@ func (wrtr *Writer) send(Time time.Time) {
             Body:        body,
         },
     )
+
     failOnError(err, "Failed to publish a message")
 }
 
 func (wrtr *Writer) run() {
+    dt := time.Now()
+    fmt.Println(dt.Format("01-02-2006 15:04:05"), ": server started");
     ticker := time.NewTicker(time.Second)
     for {
         Time := <- ticker.C
