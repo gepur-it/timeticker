@@ -23,9 +23,7 @@ func main() {
     if err != nil {
         fmt.Println("error:", err)
     }
-//      writer := writer(configuration)
-    writer := &Writer{}
-    writer.connect(configuration)
+    writer := &Writer{configuration: configuration}
     go writer.run()
     for {
     }

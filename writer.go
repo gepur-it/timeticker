@@ -14,18 +14,28 @@ func failOnError(err error, msg string) {
 }
 
 type Writer struct {
-    Connection *amqp.Connection
-    Channel *amqp.Channel
-    QueueName string
+    configuration Configuration
+}
+
+func connect(configuration Configuration) (*amqp.Connection, *amqp.Channel) {
+      conn, err := amqp.Dial(configuration.ConnectionString)
+      failOnError(err, "Failed to connect to RabbitMQ")
+      ch, err := conn.Channel()
+      failOnError(err, "Failed to open a channel")
+      return conn, ch
 }
 
 func (wrtr *Writer) send(Time time.Time) {
+    conn, ch := connect(wrtr.configuration)
+    defer conn.Close()
+    defer ch.Close()
+
     message := message(Time.Unix())
     body, err := json.Marshal(message)
     failOnError(err, "Failed encode message")
-    err = wrtr.Channel.Publish(
-        wrtr.QueueName,     // exchange
-        wrtr.QueueName, // routing key
+    err = ch.Publish(
+        wrtr.configuration.QueueName,     // exchange
+        wrtr.configuration.QueueName, // routing key
         false,  // mandatory
         false,  // immediate
         amqp.Publishing {
@@ -36,19 +46,7 @@ func (wrtr *Writer) send(Time time.Time) {
     failOnError(err, "Failed to publish a message")
 }
 
-func (wrtr *Writer) connect(Config Configuration) {
-    wrtr.QueueName = Config.QueueName
-    conn, err := amqp.Dial(Config.ConnectionString)
-    failOnError(err, "Failed to connect to RabbitMQ")
-    wrtr.Connection = conn
-    ch, err := conn.Channel()
-    failOnError(err, "Failed to open a channel")
-    wrtr.Channel = ch
-}
-
 func (wrtr *Writer) run() {
-    defer wrtr.Connection.Close()
-    defer wrtr.Channel.Close()
     ticker := time.NewTicker(time.Second)
     for {
         Time := <- ticker.C
