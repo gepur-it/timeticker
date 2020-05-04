@@ -24,7 +24,5 @@ func main() {
         fmt.Println("error:", err)
     }
     writer := &Writer{configuration: configuration}
-    go writer.run()
-    for {
-    }
+    writer.run();
 }
